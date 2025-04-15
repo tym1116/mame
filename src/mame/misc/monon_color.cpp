@@ -69,6 +69,7 @@
 
 //#define VERBOSE     (LOG_VDP)
 #define VERBOSE     (0)
+#include "stb_image_write.h" // 引入图片保存库
 
 #include "logmacro.h"
 
@@ -249,21 +250,57 @@ void monon_color_state::machine_reset()
 
 uint32_t monon_color_state::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	rgb_t const *videoram = m_vidbuffer.get();
+    rgb_t const *videoram = m_vidbuffer.get();
 
-	for (int y = 0; y < VIDEO_HEIGHT; y++)
-	{
-		int count = y * VIDEO_WIDTH;
-		for(int x = 0; x < VIDEO_WIDTH; x++)
-		{
-			rgb_t pixel = videoram[count++];
-			bitmap.pix(y, x) = pixel;
-		}
-	}
+    for (int y = 0; y < VIDEO_HEIGHT; y++)
+    {
+        int count = y * VIDEO_WIDTH;
+        for (int x = 0; x < VIDEO_WIDTH; x++)
+        {
+            rgb_t pixel = videoram[count++];
+            bitmap.pix(y, x) = pixel;
+        }
+    }
 
-	return 0;
+    // 调用保存图片的方法
+    save_frame_to_file();
+
+    return 0;
 }
+void monon_color_state::save_frame_to_file()
+{
+    // 定义保存路径
+    const std::string save_path = "D:/res/";
 
+    // 生成文件名，例如 frame_0001.png
+    static int frame_count = 0;
+    std::ostringstream file_name;
+    file_name << save_path << "frame_" << std::setw(4) << std::setfill('0') << frame_count++ << ".png";
+
+    // 将缓冲区数据转换为 RGB 格式
+    std::unique_ptr<uint8_t[]> rgb_data = std::make_unique<uint8_t[]>(VIDEO_WIDTH * VIDEO_HEIGHT * 3);
+    for (int y = 0; y < VIDEO_HEIGHT; y++)
+    {
+        for (int x = 0; x < VIDEO_WIDTH; x++)
+        {
+            rgb_t pixel = m_vidbuffer[(y * VIDEO_WIDTH) + x];
+            int index = (y * VIDEO_WIDTH + x) * 3;
+            rgb_data[index + 0] = pixel.r();
+            rgb_data[index + 1] = pixel.g();
+            rgb_data[index + 2] = pixel.b();
+        }
+    }
+
+    // 使用 stb_image_write 保存为 PNG 文件
+    if (stbi_write_png(file_name.str().c_str(), VIDEO_WIDTH, VIDEO_HEIGHT, 3, rgb_data.get(), VIDEO_WIDTH * 3))
+    {
+        LOGMASKED(LOG_VDP, "Frame saved to %s\n", file_name.str().c_str());
+    }
+    else
+    {
+        LOGMASKED(LOG_VDP, "Failed to save frame to %s\n", file_name.str().c_str());
+    }
+}
 static INPUT_PORTS_START( monon_color )
 	PORT_START("DEBUG0") // Port 0
 	PORT_DIPNAME( 0x01, 0x01, "PORT0" )
